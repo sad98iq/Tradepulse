@@ -6,7 +6,9 @@ A responsive, installable Progressive Web App (PWA) for **trading education and 
 
 - Luxury black-and-gold responsive interface
 - Overview dashboard and illustrative chart
-- Six fictional/demo instruments in the market watchlist
+- Six selectable fictional/demo instruments in the market watchlist
+- Practice chart styles: candlesticks, line, and area
+- Smooth, bounded time-based demo movement (not live market data)
 - Virtual UP/DOWN practice rounds (30 seconds, 1 minute, or 2 minutes)
 - Local virtual balance, practice history, and win-rate summary
 - Six beginner learning lessons with completion tracking

@@ -47,10 +47,11 @@
   function makeFeed(id, seed, height, candleMode=false){
     const svg=$(id); if(!svg)return;
     let n=seed, rand=()=>{n=(n*16807)%2147483647;return (n-1)/2147483646;};
+    const phase=seed*0.73;
     let value=100, points=[];
-    for(let i=0;i<90;i++){value+=(rand()-.5)*.34;points.push(value);}
-    const feed={id,svg,height,candleMode,mode:candleMode?chartMode:"line",points,current:value,target:value,lastTarget:0,lastSample:0,lastFrame:0,rand};
-    chartFeeds.set(id,feed); renderFeed(feed, true);
+    for(let i=0;i<90;i++){value+=(rand()-.5)*.18;points.push(value);}
+    const feed={id,svg,height,candleMode,mode:candleMode?chartMode:"line",points,current:100,target:100,phase,lastSample:0,lastFrame:0};
+    chartFeeds.set(id,feed); renderFeed(feed);
   }
   function smoothPath(coords){
     if(!coords.length)return '';
@@ -80,7 +81,8 @@
     } else {
       const coords=vals.map((v,i)=>[i/(vals.length-1)*width,y(v)]);
       const line=smoothPath(coords), area=`${line} L ${width} ${h} L 0 ${h} Z`;
-      visual=`<defs><linearGradient id="fill-${f.id}" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#d6ad55" stop-opacity=".14"/><stop offset="100%" stop-color="#d6ad55" stop-opacity="0"/></linearGradient></defs><path d="${area}" fill="url(#fill-${f.id})"/><path d="${line}" fill="none" stroke="#d6ad55" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`;
+      const fill=f.mode==='area'?`<path d="${area}" fill="url(#fill-${f.id})"/>`:'';
+      visual=`<defs><linearGradient id="fill-${f.id}" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#d6ad55" stop-opacity=".30"/><stop offset="100%" stop-color="#d6ad55" stop-opacity=".015"/></linearGradient></defs>${fill}<path d="${line}" fill="none" stroke="#d6ad55" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`;
     }
     const lastY=y(vals[vals.length-1]);
     f.svg.innerHTML=`${grid}${visual}<circle cx="${width-2}" cy="${lastY}" r="3" fill="#f2d58d" stroke="#d6ad55" stroke-width="1.5"/>`;
@@ -93,19 +95,20 @@
       btn.classList.toggle('active',active);btn.setAttribute('aria-pressed',String(active));
     });
   }
+  function priceScale(m){ return m.precision===5?0.00012:m.precision===3?0.012:m.symbol==="GOLD"?0.55:8; }
+  function simulatedPrice(m,feed){ return m.price+(feed.current-100)*priceScale(m); }
   function animateFeeds(now){
     for(const f of chartFeeds.values()){
-      const dt=f.lastFrame?Math.min(64,now-f.lastFrame):16; f.lastFrame=now;
-      // Small target changes and slower easing reduce the visible wave while keeping motion continuous.
-      if(now-f.lastTarget>1900){f.lastTarget=now;f.target+=(f.rand()-.5)*.72;}
-      f.current+=(f.target-f.current)*(1-Math.exp(-dt/1850));
-      if(now-f.lastSample>90){f.lastSample=now;f.points.push(f.current);if(f.points.length>90)f.points.shift();}
+      // A bounded, time-based curve gives every feed the same smooth cadence: no random jumps or frozen target.
+      f.current=100+Math.sin(now/3600+f.phase)*0.92+Math.sin(now/6900+f.phase*1.7)*0.48+Math.sin(now/1450+f.phase*.6)*0.09;
+      if(now-f.lastSample>=90){f.lastSample=now;f.points.push(f.current);if(f.points.length>90)f.points.shift();}
       renderFeed(f);
     }
     const main=chartFeeds.get('hero-chart');
-    if(main){markets[0].price=1.08425+(main.current-100)*0.000012;$('hero-price').textContent=markets[0].price.toFixed(5);}
+    if(main){const m=markets[0];$('hero-price').textContent=simulatedPrice(m,main).toFixed(m.precision);}
     const practice=chartFeeds.get('practice-chart');
-    if(practice){const m=markets.find(x=>x.symbol===$('instrument-select').value)||markets[0];$('practice-price').textContent=(m.price+(practice.current-100)*(m.precision===5?.000012:m.precision===3?.0012:.012)).toLocaleString('en-US',{minimumFractionDigits:m.precision,maximumFractionDigits:m.precision});}
+    if(practice){const m=markets.find(x=>x.symbol===$('instrument-select').value)||markets[0];$('practice-price').textContent=simulatedPrice(m,practice).toLocaleString('en-US',{minimumFractionDigits:m.precision,maximumFractionDigits:m.precision});}
+    markets.forEach((m,i)=>{const f=chartFeeds.get('spark-'+i),el=document.querySelector(`[data-market-price="${m.symbol}"]`);if(f&&el)el.textContent=simulatedPrice(m,f).toLocaleString('en-US',{minimumFractionDigits:m.precision,maximumFractionDigits:m.precision});});
     requestAnimationFrame(animateFeeds);
   }
   function drawChart(id,seed=7,height=210){makeFeed(id,seed,height,id==='hero-chart'||id==='practice-chart');}
@@ -126,7 +129,7 @@
   function renderRecent(){ $("recent-table").innerHTML=tableHTML(state.history.slice(0,5)); }
   function renderHistory(){ $("history-table").innerHTML=tableHTML(state.history); }
   function renderMarkets(){
-    $("market-grid").innerHTML=markets.map((m,i)=>`<article class="panel market-card"><div class="market-card-top"><div><div class="market-symbol">${m.symbol}</div><div class="market-desc">${m.name}</div></div><span class="tag">DEMO</span></div><div class="market-value">${m.price.toLocaleString("en-US",{minimumFractionDigits:m.precision,maximumFractionDigits:m.precision})}</div><div class="market-foot"><span class="${m.up?"positive":"negative"}">${m.change}</span><small>Illustrative move</small></div><svg class="sparkline" viewBox="0 0 300 40" preserveAspectRatio="none" id="spark-${i}"></svg></article>`).join("");
+    $("market-grid").innerHTML=markets.map((m,i)=>`<article class="panel market-card market-card-select" role="button" tabindex="0" data-select-market="${m.symbol}" aria-label="Select ${m.symbol}"><div class="market-card-top"><div><div class="market-symbol">${m.symbol}</div><div class="market-desc">${m.name}</div></div><span class="tag">DEMO</span></div><div class="market-value" data-market-price="${m.symbol}">${m.price.toLocaleString("en-US",{minimumFractionDigits:m.precision,maximumFractionDigits:m.precision})}</div><div class="market-foot"><span class="${m.up?"positive":"negative"}">${m.change}</span><small>Illustrative move</small></div><svg class="sparkline" viewBox="0 0 300 40" preserveAspectRatio="none" id="spark-${i}"></svg></article>`).join("");
     markets.forEach((m,i)=>drawChart("spark-"+i,13+i,40));
   }
   function renderLessons(){
@@ -143,8 +146,12 @@
   function closeModal(){ $("modal").classList.remove("open"); $("modal").setAttribute("aria-hidden","true"); }
   function setInstrument(){
     const symbol=$("instrument-select").value; const m=markets.find(x=>x.symbol===symbol)||markets[0];
-    $("practice-pair").textContent=m.symbol.replace("/"," / "); $("practice-price").textContent=m.price.toLocaleString("en-US",{minimumFractionDigits:m.precision,maximumFractionDigits:m.precision});
-    drawChart("practice-chart",markets.indexOf(m)+20,260);
+    $("instrument-select").value=m.symbol;
+    $("practice-pair").textContent=m.symbol.replace("/"," / ");
+    const feed=chartFeeds.get('practice-chart');
+    const price=feed?simulatedPrice(m,feed):m.price;
+    $("practice-price").textContent=price.toLocaleString("en-US",{minimumFractionDigits:m.precision,maximumFractionDigits:m.precision});
+    document.querySelectorAll('[data-select-market]').forEach(card=>card.classList.toggle('selected',card.dataset.selectMarket===m.symbol));
   }
   function startRound(direction){
     if(activeRound){notify("A practice round is already running.");return;}
@@ -194,6 +201,8 @@
   $("up-button").addEventListener("click",()=>startRound("UP"));
   $("down-button").addEventListener("click",()=>startRound("DOWN"));
   $("instrument-select").addEventListener("change",setInstrument);
+  $("market-grid").addEventListener("click",e=>{const card=e.target.closest('[data-select-market]');if(!card)return;$("instrument-select").value=card.dataset.selectMarket;setInstrument();go('practice');});
+  $("market-grid").addEventListener("keydown",e=>{if(e.key!=="Enter"&&e.key!==" ")return;const card=e.target.closest('[data-select-market]');if(!card)return;e.preventDefault();$("instrument-select").value=card.dataset.selectMarket;setInstrument();go('practice');});
   document.querySelectorAll("[data-amount]").forEach(b=>b.addEventListener("click",()=>$("stake-input").value=b.dataset.amount));
   $("modal-close").addEventListener("click",closeModal);
   $("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal();});
