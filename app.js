@@ -41,20 +41,30 @@
     if(view==="academy") renderLessons();
     window.scrollTo({top:0,behavior:"smooth"});
   }
-  // Smooth deterministic demo feed. All charts share one time-based movement model.
+  // Continuous demo feed: a smooth underlying curve drives every chart.
+  // Candles are real OHLC intervals; the active candle updates every animation frame.
   const chartFeeds = new Map();
   let chartMode = "candles";
-  const valueAt = (time, phase) => {
-    const t = time / 1000;
-    return 100 + 0.78*Math.sin(t*0.43+phase) + 0.27*Math.sin(t*0.91+phase*1.37) + 0.11*Math.sin(t*1.63+phase*2.11);
+  const BAR_MS = 1400;
+  const HISTORY_MS = 56000;
+  const SAMPLE_MS = 100;
+  const valueAt = (elapsed, phase) => {
+    const t = elapsed / 1000;
+    return 100 + 0.62*Math.sin(t*0.105+phase) + 0.24*Math.sin(t*0.047+phase*1.31) + 0.075*Math.sin(t*0.19+phase*2.07);
   };
   function makeFeed(id, seed, height, candleMode=false){
     const svg=$(id); if(!svg)return;
-    const phase=seed*0.73;
-    const now=performance.now();
+    const phase=seed*0.73, now=performance.now();
+    const bars=[];
+    for(let start=-HISTORY_MS;start<0;start+=BAR_MS){
+      const vals=[];
+      for(let t=start;t<start+BAR_MS;t+=100) vals.push(valueAt(t,phase));
+      if(!vals.length)continue;
+      bars.push({open:vals[0],high:Math.max(...vals),low:Math.min(...vals),close:vals[vals.length-1]});
+    }
     const points=[];
-    for(let i=89;i>=0;i--) points.push(valueAt(now-i*65,phase));
-    const feed={id,svg,height,candleMode,mode:candleMode?chartMode:"line",points,current:valueAt(now,phase),phase,lastSample:now,lastRender:0};
+    for(let t=-HISTORY_MS;t<=0;t+=SAMPLE_MS) points.push(valueAt(t,phase));
+    const feed={id,svg,height,candleMode,mode:candleMode?chartMode:"line",phase,startTime:now,elapsed:0,bars,points,lastSample:0,lastRender:0,current:valueAt(0,phase)};
     chartFeeds.set(id,feed); renderFeed(feed);
   }
   function smoothPath(coords){
@@ -67,31 +77,31 @@
     return d;
   }
   function renderFeed(f){
-    const width=760, h=f.height, vals=f.points;
-    const min=Math.min(...vals)-1.2,max=Math.max(...vals)+1.2,span=max-min||1;
+    const width=760,h=f.height;
+    const vals=f.mode==='candles'?f.bars.flatMap(b=>[b.low,b.high,b.open,b.close]):f.points;
+    const min=Math.min(...vals)-.22,max=Math.max(...vals)+.22,span=max-min||1;
     const y=v=>h-((v-min)/span)*(h-18)-9;
     const grid=`<g stroke="#29282d" stroke-width="1"><path d="M0 ${h*.25}H${width} M0 ${h*.5}H${width} M0 ${h*.75}H${width}"/></g>`;
     let visual='';
     if(f.mode==='candles'){
-      const group=4, candleWidth=5.4, total=Math.floor(vals.length/group);
-      for(let c=0;c<total;c++){
-        const a=vals.slice(c*group,(c+1)*group); if(a.length<2)continue;
-        const open=a[0],close=a[a.length-1],high=Math.max(...a)+.10,low=Math.min(...a)-.10;
-        const x=(c/(total-1||1))*width;
-        const up=close>=open, color=up?'#20c997':'#ef626c';
-        const top=y(Math.max(open,close)),bottom=y(Math.min(open,close));
-        visual+=`<g stroke="${color}" fill="${color}" opacity=".94"><path d="M${x} ${y(high)}V${y(low)}" stroke-width="1.25"/><rect x="${x-candleWidth/2}" y="${top}" width="${candleWidth}" height="${Math.max(2,bottom-top)}" rx=".65"/></g>`;
-      }
+      const bars=f.bars, step=width/Math.max(1,bars.length), candleWidth=Math.max(4,step*.56);
+      bars.forEach((b,i)=>{
+        const x=(i+.5)*step,up=b.close>=b.open,color=up?'#20c997':'#ef626c';
+        const top=y(Math.max(b.open,b.close)),bottom=y(Math.min(b.open,b.close));
+        visual+=`<g stroke="${color}" fill="${color}"><path d="M${x} ${y(b.high)}V${y(b.low)}" stroke-width="1.35"/><rect x="${x-candleWidth/2}" y="${top}" width="${candleWidth}" height="${Math.max(1.8,bottom-top)}" rx=".8"/></g>`;
+      });
     } else {
-      const coords=vals.map((v,i)=>[i/(vals.length-1)*width,y(v)]);
-      const line=smoothPath(coords), area=`${line} L ${width} ${h} L 0 ${h} Z`;
+      const coords=f.points.map((v,i)=>[i/(f.points.length-1)*width,y(v)]);
+      const line=smoothPath(coords),area=`${line} L ${width} ${h} L 0 ${h} Z`;
       const fill=f.mode==='area'?`<path d="${area}" fill="url(#fill-${f.id})"/>`:'';
-      visual=`<defs><linearGradient id="fill-${f.id}" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#d6ad55" stop-opacity=".30"/><stop offset="100%" stop-color="#d6ad55" stop-opacity=".015"/></linearGradient></defs>${fill}<path d="${line}" fill="none" stroke="#d6ad55" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`;
+      visual=`<defs><linearGradient id="fill-${f.id}" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#d6ad55" stop-opacity=".30"/><stop offset="100%" stop-color="#d6ad55" stop-opacity=".015"/></linearGradient></defs>${fill}<path d="${line}" fill="none" stroke="#d6ad55" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`;
     }
-    const lastY=y(vals[vals.length-1]);
-    f.svg.innerHTML=`${grid}${visual}<circle cx="${width-2}" cy="${lastY}" r="3" fill="#f2d58d" stroke="#d6ad55" stroke-width="1.5"/>`;
+    const last=f.mode==='candles'?f.bars[f.bars.length-1].close:f.points[f.points.length-1];
+    visual+=`<circle cx="${width-2}" cy="${y(last)}" r="2.8" fill="#f2d58d" stroke="#d6ad55" stroke-width="1.3"/>`;
+    f.svg.innerHTML=`${grid}${visual}`;
   }
   function setChartMode(mode){
+    if(!['candles','area','line'].includes(mode))return;
     chartMode=mode;
     chartFeeds.forEach(f=>{if(f.candleMode){f.mode=mode;renderFeed(f);}});
     document.querySelectorAll('[data-chart-mode]').forEach(btn=>{
@@ -103,14 +113,35 @@
   function simulatedPrice(m,feed){ return m.price+(feed.current-100)*priceScale(m); }
   function animateFeeds(now){
     for(const f of chartFeeds.values()){
-      f.current=valueAt(now,f.phase);
-      if(now-f.lastSample>=55){
-        const steps=Math.min(4,Math.floor((now-f.lastSample)/55));
-        for(let i=0;i<steps;i++) f.points.push(valueAt(f.lastSample+(i+1)*55,f.phase));
-        f.lastSample+=steps*55;
-        while(f.points.length>90)f.points.shift();
+      const elapsed=now-f.startTime;
+      f.elapsed=elapsed;
+      f.current=valueAt(elapsed,f.phase);
+      const barIndex=Math.floor(elapsed/BAR_MS);
+      // Start a new OHLC bar exactly on its interval boundary; retain completed bars.
+      if(!f.activeBar){
+        const v=valueAt(elapsed,f.phase);f.activeBar={open:v,high:v,low:v,close:v};
       }
-      if(now-f.lastRender>=55){renderFeed(f);f.lastRender=now;}
+      const barElapsed=elapsed%BAR_MS;
+      if(f._barIndex===undefined)f._barIndex=barIndex;
+      if(barIndex!==f._barIndex){
+        f.bars.push(f.activeBar);while(f.bars.length>40)f.bars.shift();
+        f.activeBar={open:f.current,high:f.current,low:f.current,close:f.current};f._barIndex=barIndex;
+      }
+      f.activeBar.close=f.current;f.activeBar.high=Math.max(f.activeBar.high,f.current);f.activeBar.low=Math.min(f.activeBar.low,f.current);
+      if(f.bars.length){f.bars[f.bars.length-1]=f.bars[f.bars.length-1];}
+      if(now-f.lastSample>=SAMPLE_MS){
+        const steps=Math.min(12,Math.floor((now-f.lastSample)/SAMPLE_MS));
+        for(let i=0;i<steps;i++)f.points.push(valueAt(f.lastSample+SAMPLE_MS*(i+1)-f.startTime,f.phase));
+        f.lastSample+=steps*SAMPLE_MS;while(f.points.length>560)f.points.shift();
+      }
+      const renderEvery=f.id.startsWith("spark-")?180:(f.mode==="candles"?33:55);
+      if(now-f.lastRender>=renderEvery){
+        if(f.mode==='candles'){
+          const displayBars=f.bars.slice(-39).concat([{...f.activeBar}]);
+          const saved=f.bars;f.bars=displayBars;renderFeed(f);f.bars=saved;
+        } else renderFeed(f);
+        f.lastRender=now;
+      }
     }
     const main=chartFeeds.get('hero-chart');
     if(main){const m=markets[0];$('hero-price').textContent=simulatedPrice(m,main).toFixed(m.precision);}

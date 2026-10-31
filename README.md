@@ -97,3 +97,7 @@ tradepulse-v2/
 - Update the cache name in `sw.js` whenever you deploy a new version.
 
 TradePulse V2 is a starter project, not a certified financial product or production payment application.
+
+## Chart motion update
+
+The simulator now uses a continuous, time-based demo price curve. Candlesticks are built from OHLC intervals: each active candle updates its close, high, and low continuously, then closes at a fixed interval while completed candles remain in the chart history. Line and area views use the same underlying feed. All prices remain illustrative simulation data, not live quotes.
