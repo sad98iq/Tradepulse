@@ -239,6 +239,20 @@
   $("reset-demo").addEventListener("click",resetAccount);
   $("up-button").addEventListener("click",()=>startRound("UP"));
   $("down-button").addEventListener("click",()=>startRound("DOWN"));
+  const durationSelect=$("duration-select");
+  function syncDurationPresets(){
+    document.querySelectorAll("[data-duration-preset]").forEach(b=>{
+      const selected=Number(b.dataset.durationPreset)===Number(durationSelect.value);
+      b.classList.toggle("active",selected);
+      b.setAttribute("aria-pressed",selected?"true":"false");
+    });
+  }
+  document.querySelectorAll("[data-duration-preset]").forEach(b=>b.addEventListener("click",()=>{
+    if(activeRound){notify("Wait for the current practice round to finish before changing its duration.");return;}
+    durationSelect.value=b.dataset.durationPreset;syncDurationPresets();go("practice");
+    notify(`Round duration set to ${b.textContent.trim()}.`);
+  }));
+  durationSelect.addEventListener("change",syncDurationPresets);
   $("instrument-select").addEventListener("change",setInstrument);
   $("market-grid").addEventListener("click",e=>{const card=e.target.closest('[data-select-market]');if(!card)return;$("instrument-select").value=card.dataset.selectMarket;setInstrument();go('practice');});
   $("market-grid").addEventListener("keydown",e=>{if(e.key!=="Enter"&&e.key!==" ")return;const card=e.target.closest('[data-select-market]');if(!card)return;e.preventDefault();$("instrument-select").value=card.dataset.selectMarket;setInstrument();go('practice');});
@@ -252,7 +266,7 @@
   $("export-data").addEventListener("click",()=>{const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="tradepulse-practice-data.json";a.click();URL.revokeObjectURL(url);});
   document.querySelectorAll('[data-chart-mode]').forEach(btn=>btn.addEventListener('click',()=>setChartMode(btn.dataset.chartMode)));
   $("hero-price").textContent=markets[0].price.toFixed(5);drawChart("hero-chart",8,210);drawChart("practice-chart",20,260);setChartMode(chartMode);
-  renderMarkets();renderLessons();setInstrument();updateUI();
+  renderMarkets();renderLessons();setInstrument();syncDurationPresets();updateUI();
   requestAnimationFrame(animateFeeds);
   if("serviceWorker" in navigator && location.protocol!=="file:"){window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));}
 })();

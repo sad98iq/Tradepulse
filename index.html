@@ -25,6 +25,17 @@
         <button class="nav-link" data-view="history"><span>◷</span> Trade history</button>
         <button class="nav-link" data-view="academy"><span>▤</span> Academy</button>
       </nav>
+      <div class="workspace-duration" aria-label="Quick round duration">
+        <div class="duration-caption">ROUND TIME</div>
+        <div class="duration-shortcuts">
+          <button type="button" data-duration-preset="5">5 sec</button>
+          <button type="button" data-duration-preset="10">10 sec</button>
+          <button type="button" data-duration-preset="15">15 sec</button>
+          <button type="button" data-duration-preset="30">30 sec</button>
+          <button type="button" data-duration-preset="60">1 min</button>
+          <button type="button" data-duration-preset="120">2 min</button>
+        </div>
+      </div>
       <div class="side-label side-label-spaced">ACCOUNT</div>
       <nav class="nav">
         <button class="nav-link" data-view="plans"><span>✧</span> Membership</button>
@@ -112,7 +123,7 @@
             <input id="stake-input" type="number" min="1" max="10000" step="1" value="100">
             <div class="amount-chips"><button data-amount="50">$50</button><button data-amount="100">$100</button><button data-amount="250">$250</button><button data-amount="500">$500</button></div>
             <label for="duration-select">Round duration</label>
-            <select id="duration-select"><option value="30">30 seconds</option><option value="60">1 minute</option><option value="120">2 minutes</option></select>
+            <select id="duration-select"><option value="5">5 seconds</option><option value="10">10 seconds</option><option value="15">15 seconds</option><option value="30" selected>30 seconds</option><option value="60">1 minute</option><option value="120">2 minutes</option></select>
             <div class="payout-note"><span>Illustrative practice reward</span><b>+80% if correct</b><small>Game mechanic only — not a real payout or forecast.</small></div>
             <div class="direction-buttons"><button id="up-button" class="direction up"><b>↑</b><span>UP</span><small>Price finishes higher</small></button><button id="down-button" class="direction down"><b>↓</b><span>DOWN</span><small>Price finishes lower</small></button></div>
             <p class="ticket-disclaimer">Starting a round uses virtual credits only. A random simulated outcome is generated when the timer ends.</p>
