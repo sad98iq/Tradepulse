@@ -7,12 +7,12 @@
   let toastTimer;
   const $ = (id) => document.getElementById(id);
   const markets = [
-    {symbol:"EUR/USD",name:"Euro / US Dollar",price:1.08425,change:"+0.18%",up:true,precision:5},
-    {symbol:"GBP/USD",name:"British Pound / US Dollar",price:1.27184,change:"−0.12%",up:false,precision:5},
-    {symbol:"USD/JPY",name:"US Dollar / Japanese Yen",price:149.325,change:"+0.31%",up:true,precision:3},
-    {symbol:"GOLD",name:"Gold (illustrative)",price:2342.65,change:"+0.42%",up:true,precision:2},
-    {symbol:"BTC/USD",name:"Bitcoin / US Dollar",price:67420.5,change:"−0.76%",up:false,precision:2},
-    {symbol:"ETH/USD",name:"Ether / US Dollar",price:3521.8,change:"+0.09%",up:true,precision:2}
+    {symbol:"EUR/USD",name:"Euro / US Dollar",price:1.08425,openingPrice:1.08425,change:"+0.18%",up:true,precision:5},
+    {symbol:"GBP/USD",name:"British Pound / US Dollar",price:1.27184,openingPrice:1.27184,change:"−0.12%",up:false,precision:5},
+    {symbol:"USD/JPY",name:"US Dollar / Japanese Yen",price:149.325,openingPrice:149.325,change:"+0.31%",up:true,precision:3},
+    {symbol:"GOLD",name:"Gold (illustrative)",price:2342.65,openingPrice:2342.65,change:"+0.42%",up:true,precision:2},
+    {symbol:"BTC/USD",name:"Bitcoin / US Dollar",price:67420.5,openingPrice:67420.5,change:"−0.76%",up:false,precision:2},
+    {symbol:"ETH/USD",name:"Ether / US Dollar",price:3521.8,openingPrice:3521.8,change:"+0.09%",up:true,precision:2}
   ];
   const lessons = [
     ["Market basics","Understand what a financial market is, why prices move, and the difference between an asset and a trading instrument.","A market brings buyers and sellers together. A quoted price is the level at which an instrument may be exchanged. Prices can change as expectations, supply, demand, and new information change. This lesson uses fictional examples; it does not provide a prediction or recommendation."],
@@ -41,12 +41,42 @@
     if(view==="academy") renderLessons();
     window.scrollTo({top:0,behavior:"smooth"});
   }
-  function points(seed=7,count=55){let x=seed,arr=[];for(let i=0;i<count;i++){x=(x*9301+49297)%233280;arr.push(75+(x/233280)*100+(Math.sin(i/4)*13)+(i*0.35));}return arr;}
-  function drawChart(id,seed=7,height=210){
-    const svg=$(id); if(!svg)return; const vals=points(seed,65),min=Math.min(...vals)-8,max=Math.max(...vals)+8;
-    const coords=vals.map((v,i)=>`${(i/(vals.length-1))*760},${height-((v-min)/(max-min))*height}`).join(" ");
+  // Every chart uses a local, fictional random-walk feed. No external market data is used.
+  const chartHistory = new Map();
+  function historyFor(m){
+    if(!chartHistory.has(m.symbol)){
+      let seed=0; for(const ch of m.symbol) seed=(seed*31+ch.charCodeAt(0))>>>0;
+      const vals=[]; let v=m.price;
+      for(let i=0;i<65;i++){seed=(seed*1664525+1013904223)>>>0;v+=( ((seed/4294967296)-.5)*m.price*.0018 );vals.push(v);}
+      chartHistory.set(m.symbol,vals);
+    }
+    return chartHistory.get(m.symbol);
+  }
+  function drawValues(id,vals,height=210){
+    const svg=$(id); if(!svg)return; const min=Math.min(...vals),max=Math.max(...vals),pad=Math.max((max-min)*.18,Math.abs(max)*.00008),lo=min-pad,hi=max+pad;
+    const coords=vals.map((v,i)=>`${(i/(vals.length-1))*760},${height-((v-lo)/(hi-lo))*height}`).join(" ");
     const area=`0,${height} ${coords} 760,${height}`;
-    svg.innerHTML=`<defs><linearGradient id="goldFill${id}" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#d6ad55" stop-opacity=".25"/><stop offset="100%" stop-color="#d6ad55" stop-opacity="0"/></linearGradient></defs><g stroke="#29282d" stroke-width="1"><path d="M0 ${height*.25}H760 M0 ${height*.5}H760 M0 ${height*.75}H760"/></g><polygon points="${area}" fill="url(#goldFill${id})"/><polyline points="${coords}" fill="none" stroke="#d6ad55" stroke-width="2.2" vector-effect="non-scaling-stroke"/>`;
+    svg.innerHTML=`<defs><linearGradient id="goldFill${id}" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#d6ad55" stop-opacity=".25"/><stop offset="100%" stop-color="#d6ad55" stop-opacity="0"/></linearGradient></defs><g stroke="#29282d" stroke-width="1"><path d="M0 ${height*.25}H760 M0 ${height*.5}H760 M0 ${height*.75}H760"/></g><polygon points="${area}" fill="url(#goldFill${id})"/><polyline class="live-price-line" points="${coords}" fill="none" stroke="#d6ad55" stroke-width="2.2" vector-effect="non-scaling-stroke"/>`;
+  }
+  function drawMarketChart(m,id,height){drawValues(id,historyFor(m),height);}
+  function drawChart(id,seed=7,height=210){const m=markets.find(x=>x.symbol===($("instrument-select")?.value||"EUR/USD"))||markets[0];drawMarketChart(m,id,height);}
+  function formatPrice(m){return m.price.toLocaleString("en-US",{minimumFractionDigits:m.precision,maximumFractionDigits:m.precision});}
+  function updateMarketMovement(){
+    markets.forEach((m,i)=>{
+      const vals=historyFor(m); const previous=m.price;
+      // Small random walk, scaled per instrument, with occasional gentle directional bursts.
+      const step=(Math.random()-.5)*m.price*(m.symbol==="BTC/USD"||m.symbol==="ETH/USD"?.00065:.00022);
+      m.price=Math.max(m.price+step,m.price*.00001); vals.push(m.price); if(vals.length>65)vals.shift();
+      const pct=((m.price-m.openingPrice)/m.openingPrice)*100; m.up=m.price>=m.openingPrice;
+      m.change=`${pct>=0?"+":"−"}${Math.abs(pct).toFixed(2)}%`;
+      const value=document.querySelector(`[data-market-price="${i}"]`); if(value)value.textContent=formatPrice(m);
+      const change=document.querySelector(`[data-market-change="${i}"]`); if(change){change.textContent=m.change;change.className=m.up?"positive":"negative";}
+      drawMarketChart(m,`spark-${i}`,40);
+    });
+    const hero=markets[0]; if($("hero-price"))$("hero-price").textContent=formatPrice(hero);
+    const selected=markets.find(x=>x.symbol===$("instrument-select")?.value)||markets[0];
+    if($("practice-price"))$("practice-price").textContent=formatPrice(selected);
+    drawMarketChart(hero,"hero-chart",210);drawMarketChart(selected,"practice-chart",260);
   }
   function updateUI(){
     $("balance-stat").textContent=money(state.balance); $("ticket-balance").textContent=money(state.balance);
@@ -65,8 +95,8 @@
   function renderRecent(){ $("recent-table").innerHTML=tableHTML(state.history.slice(0,5)); }
   function renderHistory(){ $("history-table").innerHTML=tableHTML(state.history); }
   function renderMarkets(){
-    $("market-grid").innerHTML=markets.map((m,i)=>`<article class="panel market-card"><div class="market-card-top"><div><div class="market-symbol">${m.symbol}</div><div class="market-desc">${m.name}</div></div><span class="tag">DEMO</span></div><div class="market-value">${m.price.toLocaleString("en-US",{minimumFractionDigits:m.precision,maximumFractionDigits:m.precision})}</div><div class="market-foot"><span class="${m.up?"positive":"negative"}">${m.change}</span><small>Illustrative move</small></div><svg class="sparkline" viewBox="0 0 300 40" preserveAspectRatio="none" id="spark-${i}"></svg></article>`).join("");
-    markets.forEach((m,i)=>drawChart("spark-"+i,13+i,40));
+    $("market-grid").innerHTML=markets.map((m,i)=>`<article class="panel market-card"><div class="market-card-top"><div><div class="market-symbol">${m.symbol}</div><div class="market-desc">${m.name}</div></div><span class="tag">DEMO</span></div><div class="market-value" data-market-price="${i}">${formatPrice(m)}</div><div class="market-foot"><span data-market-change="${i}" class="${m.up?"positive":"negative"}">${m.change}</span><small>Illustrative move</small></div><svg class="sparkline" viewBox="0 0 300 40" preserveAspectRatio="none" id="spark-${i}"></svg></article>`).join("");
+    markets.forEach((m,i)=>drawMarketChart(m,"spark-"+i,40));
   }
   function renderLessons(){
     $("lesson-grid").innerHTML=lessons.map((l,i)=>{const done=state.lessons.includes(i);return `<article class="panel lesson-card ${done?"completed":""}"><div class="lesson-number">${done?"✓":String(i+1).padStart(2,"0")}</div><h2>${l[0]}</h2><p>${l[1]}</p><button class="text-button" data-lesson="${i}">${done?"Review lesson →":"Open lesson →"}</button></article>`}).join("");
@@ -83,7 +113,7 @@
   function setInstrument(){
     const symbol=$("instrument-select").value; const m=markets.find(x=>x.symbol===symbol)||markets[0];
     $("practice-pair").textContent=m.symbol.replace("/"," / "); $("practice-price").textContent=m.price.toLocaleString("en-US",{minimumFractionDigits:m.precision,maximumFractionDigits:m.precision});
-    drawChart("practice-chart",markets.indexOf(m)+20,260);
+    drawMarketChart(m,"practice-chart",260);
   }
   function startRound(direction){
     if(activeRound){notify("A practice round is already running.");return;}
@@ -141,7 +171,8 @@
   $("save-profile").addEventListener("click",()=>{const name=$("name-input").value.trim().slice(0,24);if(!name){notify("Enter a display name first.");return;}state.name=name;save();$("profile-feedback").textContent="Profile saved on this device.";notify("Profile updated.");});
   $("clear-data").addEventListener("click",()=>{if(confirm("Permanently clear all locally saved TradePulse practice data?")){localStorage.removeItem(KEY);state={...defaults};save();renderLessons();renderHistory();notify("Local data cleared.");}});
   $("export-data").addEventListener("click",()=>{const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="tradepulse-practice-data.json";a.click();URL.revokeObjectURL(url);});
-  $("hero-price").textContent=markets[0].price.toFixed(5);drawChart("hero-chart",8,210);drawChart("practice-chart",20,260);
+  $("hero-price").textContent=markets[0].price.toFixed(5);drawMarketChart(markets[0],"hero-chart",210);drawMarketChart(markets[0],"practice-chart",260);
   renderMarkets();renderLessons();setInstrument();updateUI();
+  updateMarketMovement(); setInterval(updateMarketMovement,1200);
   if("serviceWorker" in navigator && location.protocol!=="file:"){window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));}
 })();
