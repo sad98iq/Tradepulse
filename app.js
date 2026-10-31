@@ -41,52 +41,63 @@
     if(view==="academy") renderLessons();
     window.scrollTo({top:0,behavior:"smooth"});
   }
-  const animatedCharts = new Map();
-  function points(seed=7,count=65){let x=seed,arr=[];for(let i=0;i<count;i++){x=(x*9301+49297)%233280;arr.push(100+(x/233280)*45+(Math.sin(i/4)*10));}return arr;}
-  function drawChart(id,seed=7,height=210){
+  // Continuous illustrative feed: target prices drift slowly and are eased every animation frame.
+  const chartFeeds = new Map();
+  function makeFeed(id, seed, height, candleMode=false){
     const svg=$(id); if(!svg)return;
-    const vals=points(seed,65);
-    animatedCharts.set(id,{svg,height,values:vals,current:vals[vals.length-1],from:vals[vals.length-1],target:vals[vals.length-1]+(Math.random()-.5)*12,started:performance.now(),duration:850});
-    svg.innerHTML=`<defs><linearGradient id="goldFill${id}" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#d6ad55" stop-opacity=".25"/><stop offset="100%" stop-color="#d6ad55" stop-opacity="0"/></linearGradient></defs><g stroke="#29282d" stroke-width="1"><path d="M0 ${height*.25}H760 M0 ${height*.5}H760 M0 ${height*.75}H760"/></g><path class="chart-area" fill="url(#goldFill${id})"/><path class="chart-line" fill="none" stroke="#d6ad55" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`;
+    let n=seed, rand=()=>{n=(n*16807)%2147483647;return (n-1)/2147483646;};
+    let value=100, points=[];
+    for(let i=0;i<72;i++){value+=(rand()-.49)*2.2;points.push(value);}
+    const feed={id,svg,height,candleMode,points,current:value,target:value,lastTarget:0,lastSample:0,lastFrame:0,rand};
+    chartFeeds.set(id,feed); renderFeed(feed, true);
   }
-  function paintAnimatedChart(chart,now){
-    let progress=Math.min(1,(now-chart.started)/chart.duration);
-    const eased=progress*progress*(3-2*progress);
-    chart.current=chart.from+(chart.target-chart.from)*eased;
-    if(progress>=1){
-      chart.values.push(chart.target);chart.values.shift();chart.from=chart.target;
-      chart.target=chart.from+(Math.random()-.5)*13;chart.started=now;
-      chart.duration=650+Math.random()*650;
+  function smoothPath(coords){
+    if(!coords.length)return '';
+    let d=`M ${coords[0][0]} ${coords[0][1]}`;
+    for(let i=1;i<coords.length;i++){
+      const prev=coords[i-1],cur=coords[i],mx=(prev[0]+cur[0])/2;
+      d+=` Q ${mx} ${prev[1]} ${cur[0]} ${cur[1]}`;
     }
-    const vals=chart.values.slice();vals[vals.length-1]=chart.current;
-    const min=Math.min(...vals)-8,max=Math.max(...vals)+8;
-    const xy=vals.map((v,i)=>[(i/(vals.length-1))*760,chart.height-((v-min)/(max-min))*chart.height]);
-    let d=`M ${xy[0][0]} ${xy[0][1]}`;
-    for(let i=1;i<xy.length;i++){const mx=(xy[i-1][0]+xy[i][0])/2;d+=` Q ${mx} ${xy[i-1][1]} ${mx} ${(xy[i-1][1]+xy[i][1])/2}`;}
-    d+=` T ${xy[xy.length-1][0]} ${xy[xy.length-1][1]}`;
-    chart.svg.querySelector('.chart-line').setAttribute('d',d);
-    chart.svg.querySelector('.chart-area').setAttribute('d',`${d} L 760 ${chart.height} L 0 ${chart.height} Z`);
+    return d;
   }
-  let lastFrame=0;
-  function animateCharts(now){
-    if(now-lastFrame>12){animatedCharts.forEach(chart=>paintAnimatedChart(chart,now));lastFrame=now;}
-    requestAnimationFrame(animateCharts);
+  function renderFeed(f, initial=false){
+    const width=f.candleMode?760:300, h=f.height, vals=f.points;
+    const min=Math.min(...vals)-3,max=Math.max(...vals)+3,span=max-min||1;
+    const y=v=>h-((v-min)/span)*(h-12)-6;
+    const coords=vals.map((v,i)=>[i/(vals.length-1)*width,y(v)]);
+    const line=smoothPath(coords), area=`${line} L ${width} ${h} L 0 ${h} Z`;
+    const grid=`<g stroke="#29282d" stroke-width="1"><path d="M0 ${h*.25}H${width} M0 ${h*.5}H${width} M0 ${h*.75}H${width}"/></g>`;
+    let candles='';
+    if(f.candleMode){
+      const group=4, candleWidth=6, total=Math.floor(vals.length/group);
+      for(let c=0;c<total;c++){
+        const a=vals.slice(c*group,(c+1)*group); if(a.length<2)continue;
+        const open=a[0],close=a[a.length-1],high=Math.max(...a)+.8,low=Math.min(...a)-.8;
+        const x=(c/(total-1||1))*width;
+        const up=close>=open, color=up?'#20c997':'#ef626c';
+        const top=y(Math.max(open,close)),bottom=y(Math.min(open,close));
+        candles+=`<g stroke="${color}" fill="${color}" opacity=".86"><path d="M${x} ${y(high)}V${y(low)}" stroke-width="1.3"/><rect x="${x-candleWidth/2}" y="${top}" width="${candleWidth}" height="${Math.max(2,bottom-top)}" rx=".7"/></g>`;
+      }
+    }
+    const last=coords[coords.length-1];
+    f.svg.innerHTML=`<defs><linearGradient id="fill-${f.id}" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#d6ad55" stop-opacity=".22"/><stop offset="100%" stop-color="#d6ad55" stop-opacity="0"/></linearGradient></defs>${grid}<path d="${area}" fill="url(#fill-${f.id})"/>${candles}<path d="${line}" fill="none" stroke="#d6ad55" stroke-width="${f.candleMode?2.1:2.4}" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/><circle cx="${last[0]}" cy="${last[1]}" r="3.3" fill="#f2d58d" stroke="#d6ad55" stroke-width="2"/>`;
   }
-  requestAnimationFrame(animateCharts);
-  function updateSimulatedPrices(){
-    markets.forEach((m,i)=>{
-      const movement=(Math.random()-.49)*m.price*(i===4||i===5?.00018:.000035);
-      m.price=Math.max(m.precision===5?.00001:.01,m.price+movement);
-      m.up=movement>=0;m.change=(m.up?'+':'−')+(Math.abs(movement/m.price)*100).toFixed(2)+'%';
-      const value=m.price.toLocaleString('en-US',{minimumFractionDigits:m.precision,maximumFractionDigits:m.precision});
-      const card=document.querySelectorAll('.market-card')[i];if(card){const price=card.querySelector('.market-value');const change=card.querySelector('.market-foot span');if(price)price.textContent=value;if(change){change.textContent=m.change;change.className=m.up?'positive':'negative';}}
-    });
-    const hero=$('hero-price');if(hero)hero.textContent=markets[0].price.toFixed(5);
-    const selected=markets.find(m=>m.symbol===$('instrument-select')?.value)||markets[0];
-    const practice=$('practice-price');if(practice)practice.textContent=selected.price.toLocaleString('en-US',{minimumFractionDigits:selected.precision,maximumFractionDigits:selected.precision});
-    setTimeout(updateSimulatedPrices,700);
+  function animateFeeds(now){
+    for(const f of chartFeeds.values()){
+      const dt=f.lastFrame?Math.min(64,now-f.lastFrame):16; f.lastFrame=now;
+      if(now-f.lastTarget>1150){f.lastTarget=now;f.target+= (f.rand()-.5)*5.5;}
+      // Frame-rate independent easing prevents visible price jumps.
+      f.current+=(f.target-f.current)*(1-Math.exp(-dt/720));
+      if(now-f.lastSample>75){f.lastSample=now;f.points.push(f.current);if(f.points.length>72)f.points.shift();}
+      renderFeed(f);
+    }
+    const main=chartFeeds.get('hero-chart');
+    if(main){markets[0].price=1.08425+(main.current-100)*0.000035;$('hero-price').textContent=markets[0].price.toFixed(5);}
+    const practice=chartFeeds.get('practice-chart');
+    if(practice){const m=markets.find(x=>x.symbol===$('instrument-select').value)||markets[0];$('practice-price').textContent=(m.price+(practice.current-100)*(m.precision===5?.000035:m.precision===3?.0035:.035)).toLocaleString('en-US',{minimumFractionDigits:m.precision,maximumFractionDigits:m.precision});}
+    requestAnimationFrame(animateFeeds);
   }
-  setTimeout(updateSimulatedPrices,700);
+  function drawChart(id,seed=7,height=210){makeFeed(id,seed,height,id==='hero-chart'||id==='practice-chart');}
   function updateUI(){
     $("balance-stat").textContent=money(state.balance); $("ticket-balance").textContent=money(state.balance);
     $("trades-stat").textContent=state.history.length;
@@ -182,5 +193,6 @@
   $("export-data").addEventListener("click",()=>{const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="tradepulse-practice-data.json";a.click();URL.revokeObjectURL(url);});
   $("hero-price").textContent=markets[0].price.toFixed(5);drawChart("hero-chart",8,210);drawChart("practice-chart",20,260);
   renderMarkets();renderLessons();setInstrument();updateUI();
+  requestAnimationFrame(animateFeeds);
   if("serviceWorker" in navigator && location.protocol!=="file:"){window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));}
 })();
