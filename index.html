@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0b0b0d">
+  <meta name="description" content="TradePulse — practice trading, understand markets, and build your skills with virtual funds.">
+  <title>TradePulse — Learn. Practice. Improve.</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="#" data-view="dashboard" aria-label="TradePulse home">
+        <span class="brand-mark">T<span>P</span></span>
+        <span class="brand-name">TRADE<span>PULSE</span><small>LEARN • PRACTICE • IMPROVE</small></span>
+      </a>
+      <div class="side-label">WORKSPACE</div>
+      <nav class="nav">
+        <button class="nav-link active" data-view="dashboard"><span>◫</span> Overview</button>
+        <button class="nav-link" data-view="markets"><span>⌁</span> Markets</button>
+        <button class="nav-link" data-view="practice"><span>↗</span> Practice room</button>
+        <button class="nav-link" data-view="history"><span>◷</span> Trade history</button>
+        <button class="nav-link" data-view="academy"><span>▤</span> Academy</button>
+      </nav>
+      <div class="side-label side-label-spaced">ACCOUNT</div>
+      <nav class="nav">
+        <button class="nav-link" data-view="plans"><span>✧</span> Membership</button>
+        <button class="nav-link" data-view="profile"><span>◉</span> Profile & settings</button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="support-card">
+          <div class="support-icon">✦</div>
+          <strong>Keep learning</strong>
+          <p>Practice with virtual funds. No real-money trading.</p>
+          <button class="text-button" data-view="academy">Explore academy →</button>
+        </div>
+        <div class="user-mini"><div class="avatar">TP</div><div><strong id="side-user">Trader</strong><small>Practice account</small></div><span class="online-dot"></span></div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <button class="mobile-menu" id="mobile-menu" aria-label="Open navigation">☰</button>
+        <div class="breadcrumb">TRADEPULSE <span>/</span> <b id="page-name">OVERVIEW</b></div>
+        <div class="top-actions">
+          <span class="market-status"><i></i> SIMULATION MODE</span>
+          <button class="icon-button" id="reset-demo" title="Reset practice account" aria-label="Reset practice account">↻</button>
+          <div class="avatar small-avatar">TP</div>
+        </div>
+      </header>
+
+      <section class="view active" id="view-dashboard">
+        <div class="welcome-row">
+          <div><div class="eyebrow">YOUR PRACTICE SPACE</div><h1>Good to see you, <span id="welcome-user">Trader</span>.</h1><p class="muted">Build your market knowledge one practice session at a time.</p></div>
+          <button class="button button-gold" data-view="practice">Start practising <span>→</span></button>
+        </div>
+        <div class="notice"><span>ⓘ</span><div><b>Educational simulation only.</b> Prices and outcomes are fictional demo data. No real trades, deposits, or withdrawals are available.</div></div>
+        <div class="stats-grid">
+          <article class="stat-card"><div class="stat-top"><span>VIRTUAL BALANCE</span><span class="stat-icon">◈</span></div><strong id="balance-stat">$10,000.00</strong><small class="positive">Practice funds only</small></article>
+          <article class="stat-card"><div class="stat-top"><span>PRACTICE TRADES</span><span class="stat-icon">⇄</span></div><strong id="trades-stat">0</strong><small class="muted">Total simulated rounds</small></article>
+          <article class="stat-card"><div class="stat-top"><span>WIN RATE</span><span class="stat-icon">⌁</span></div><strong id="winrate-stat">—</strong><small class="muted">Based on completed rounds</small></article>
+          <article class="stat-card"><div class="stat-top"><span>LEARNING PROGRESS</span><span class="stat-icon">✧</span></div><strong id="progress-stat">0%</strong><small class="muted">Lessons completed</small></article>
+        </div>
+        <div class="content-grid">
+          <article class="panel chart-panel">
+            <div class="panel-heading"><div><div class="eyebrow">MARKET SNAPSHOT</div><h2>Practice market</h2></div><span class="tag">DEMO DATA</span></div>
+            <div class="chart-meta"><div><span class="muted">EUR / USD</span><strong id="hero-price">1.08425</strong></div><span class="positive">+0.18% <small>simulated</small></span></div>
+            <div class="chart-wrap"><svg id="hero-chart" viewBox="0 0 760 210" preserveAspectRatio="none" aria-label="Illustrative simulated price chart"></svg></div>
+            <div class="chart-foot"><span>ILLUSTRATIVE PRICE MOVEMENT</span><span>NOT LIVE MARKET DATA</span></div>
+          </article>
+          <article class="panel quick-panel">
+            <div class="panel-heading"><div><div class="eyebrow">QUICK ACCESS</div><h2>Pick up where you left off</h2></div></div>
+            <button class="quick-item" data-view="practice"><span class="quick-icon">↗</span><span><b>Practice room</b><small>Try a virtual UP or DOWN round</small></span><i>→</i></button>
+            <button class="quick-item" data-view="markets"><span class="quick-icon">⌁</span><span><b>Explore markets</b><small>Browse illustrative price feeds</small></span><i>→</i></button>
+            <button class="quick-item" data-view="academy"><span class="quick-icon">▤</span><span><b>Learn the basics</b><small>Short lessons for beginners</small></span><i>→</i></button>
+          </article>
+        </div>
+        <div class="section-heading"><div><div class="eyebrow">YOUR ACTIVITY</div><h2>Recent practice rounds</h2></div><button class="text-button" data-view="history">View all →</button></div>
+        <div class="panel table-panel" id="recent-table"></div>
+      </section>
+
+      <section class="view" id="view-markets">
+        <div class="page-intro"><div class="eyebrow">EXPLORE INSTRUMENTS</div><h1>Practice markets</h1><p class="muted">Illustrative demo prices for learning purposes. These are not executable market quotes.</p></div>
+        <div class="market-grid" id="market-grid"></div>
+      </section>
+
+      <section class="view" id="view-practice">
+        <div class="page-intro"><div class="eyebrow">VIRTUAL TRADING SIMULATOR</div><h1>Practice room</h1><p class="muted">Test your understanding with virtual funds. No deposits or real-money outcomes.</p></div>
+        <div class="practice-layout">
+          <article class="panel practice-chart">
+            <div class="panel-heading"><div><div class="eyebrow">SELECTED INSTRUMENT</div><h2 id="practice-pair">EUR / USD</h2></div><span class="tag">SIMULATED</span></div>
+            <div class="practice-price"><strong id="practice-price">1.08425</strong><span class="positive">+0.18%</span></div>
+            <div class="chart-wrap large-chart"><svg id="practice-chart" viewBox="0 0 760 260" preserveAspectRatio="none" aria-label="Simulated practice chart"></svg></div>
+            <div class="chart-foot"><span>FICTIONAL TRAINING FEED</span><span>REFRESHES LOCALLY</span></div>
+            <div class="market-picker"><label for="instrument-select">Instrument</label><select id="instrument-select"><option>EUR/USD</option><option>GBP/USD</option><option>USD/JPY</option><option>GOLD</option><option>BTC/USD</option><option>ETH/USD</option></select></div>
+          </article>
+          <article class="panel trade-ticket">
+            <div class="eyebrow">PRACTICE TICKET</div><h2>Set up a round</h2>
+            <div class="balance-line"><span>Virtual balance</span><b id="ticket-balance">$10,000.00</b></div>
+            <label for="stake-input">Practice amount (USD)</label>
+            <input id="stake-input" type="number" min="1" max="10000" step="1" value="100">
+            <div class="amount-chips"><button data-amount="50">$50</button><button data-amount="100">$100</button><button data-amount="250">$250</button><button data-amount="500">$500</button></div>
+            <label for="duration-select">Round duration</label>
+            <select id="duration-select"><option value="30">30 seconds</option><option value="60">1 minute</option><option value="120">2 minutes</option></select>
+            <div class="payout-note"><span>Illustrative practice reward</span><b>+80% if correct</b><small>Game mechanic only — not a real payout or forecast.</small></div>
+            <div class="direction-buttons"><button id="up-button" class="direction up"><b>↑</b><span>UP</span><small>Price finishes higher</small></button><button id="down-button" class="direction down"><b>↓</b><span>DOWN</span><small>Price finishes lower</small></button></div>
+            <p class="ticket-disclaimer">Starting a round uses virtual credits only. A random simulated outcome is generated when the timer ends.</p>
+            <div id="round-status" class="round-status" aria-live="polite">Ready when you are.</div>
+          </article>
+        </div>
+      </section>
+
+      <section class="view" id="view-history">
+        <div class="page-intro"><div class="eyebrow">YOUR SIMULATED ACTIVITY</div><h1>Trade history</h1><p class="muted">A record of your virtual practice rounds on this device.</p></div>
+        <div class="panel table-panel" id="history-table"></div>
+      </section>
+
+      <section class="view" id="view-academy">
+        <div class="page-intro"><div class="eyebrow">TRADEPULSE ACADEMY</div><h1>Learn at your pace</h1><p class="muted">Short, beginner-friendly lessons. Education is not investment advice.</p></div>
+        <div class="lesson-grid" id="lesson-grid"></div>
+      </section>
+
+      <section class="view" id="view-plans">
+        <div class="page-intro"><div class="eyebrow">MEMBERSHIP</div><h1>Choose your learning pace</h1><p class="muted">Demo plans only. No payment is collected in this starter project.</p></div>
+        <div class="plan-grid">
+          <article class="panel plan-card"><div class="eyebrow">STARTER</div><h2>Free</h2><div class="plan-price">$0 <small>/ forever</small></div><ul><li>Virtual practice simulator</li><li>Beginner academy lessons</li><li>Local practice history</li></ul><button class="button button-outline full" disabled>Current plan</button></article>
+          <article class="panel plan-card featured"><div class="popular">MOST POPULAR</div><div class="eyebrow">PLUS</div><h2>TradePulse Plus</h2><div class="plan-price">$4.99 <small>/ month</small></div><ul><li>Everything in Starter</li><li>Advanced learning modules (demo)</li><li>Expanded practice analytics (demo)</li><li>Ad-free experience (when connected)</li></ul><button class="button button-gold full" id="subscribe-plus">Choose Plus</button></article>
+          <article class="panel plan-card"><div class="eyebrow">PRO</div><h2>TradePulse Pro</h2><div class="plan-price">$9.99 <small>/ month</small></div><ul><li>Everything in Plus</li><li>Advanced progress reports (demo)</li><li>Priority learning support (demo)</li></ul><button class="button button-outline full" id="subscribe-pro">Choose Pro</button></article>
+        </div>
+        <div class="panel payment-panel"><div><div class="eyebrow">PAYMENT OPTIONS</div><h2>Payment integration preview</h2><p class="muted">M-Pesa and card are selected for the future integration. This demo only records your selection locally; it does not initiate a payment.</p></div><div class="payment-options"><div class="payment-option"><b class="mpesa-mark">M</b><span><strong>M-Pesa</strong><small>Daraja API integration required</small></span><span class="tag">PLANNED</span></div><div class="payment-option"><b class="card-mark">▰</b><span><strong>Debit / credit card</strong><small>Payment gateway integration required</small></span><span class="tag">PLANNED</span></div></div></div>
+      </section>
+
+      <section class="view" id="view-profile">
+        <div class="page-intro"><div class="eyebrow">ACCOUNT SETTINGS</div><h1>Your profile</h1><p class="muted">Your demo profile is stored in this browser only.</p></div>
+        <div class="profile-layout"><article class="panel profile-card"><div class="profile-avatar">TP</div><h2 id="profile-name-display">Trader</h2><span class="tag">PRACTICE ACCOUNT</span><label for="name-input">Display name</label><input id="name-input" maxlength="24" placeholder="Your display name"><button class="button button-gold" id="save-profile">Save profile</button><p class="muted tiny" id="profile-feedback"></p></article><article class="panel settings-card"><div class="eyebrow">LOCAL DATA</div><h2>Practice account controls</h2><p class="muted">Your balance, completed rounds, lesson progress, and display name are saved in this browser's local storage.</p><button class="button button-outline" id="export-data">Export my practice data</button><button class="button button-danger" id="clear-data">Clear local practice data</button><p class="tiny muted">Clearing data cannot be undone. This does not affect any server account because this prototype has no server account.</p></article></div>
+      </section>
+
+      <footer class="footer"><span>© 2026 TradePulse</span><span>Practice with care. Learn before you risk.</span><a href="README.md">Project & safety notes</a></footer>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="modal" aria-hidden="true"><div class="modal panel" role="dialog" aria-modal="true" aria-labelledby="modal-title"><button class="modal-close" id="modal-close" aria-label="Close">×</button><div class="eyebrow">TRADEPULSE</div><h2 id="modal-title">Lesson</h2><div id="modal-body"></div><button class="button button-gold full" id="modal-action">Mark lesson complete</button></div></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>
