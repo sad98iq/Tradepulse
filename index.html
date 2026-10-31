@@ -76,6 +76,14 @@
             <button class="quick-item" data-view="practice"><span class="quick-icon">↗</span><span><b>Practice room</b><small>Try a virtual UP or DOWN round</small></span><i>→</i></button>
             <button class="quick-item" data-view="markets"><span class="quick-icon">⌁</span><span><b>Explore markets</b><small>Browse illustrative price feeds</small></span><i>→</i></button>
             <button class="quick-item" data-view="academy"><span class="quick-icon">▤</span><span><b>Learn the basics</b><small>Short lessons for beginners</small></span><i>→</i></button>
+            <div class="quick-chart-controls">
+              <div class="quick-chart-heading"><span>CHART DISPLAY</span><small>Choose a style</small></div>
+              <div class="quick-chart-buttons" role="group" aria-label="Chart display style">
+                <button class="chart-type-button active" type="button" data-chart-mode="candles" aria-pressed="true"><span class="chart-tool-icon">▥</span><small>CANDLES</small></button>
+                <button class="chart-type-button" type="button" data-chart-mode="area" aria-pressed="false"><span class="chart-tool-icon">▰</span><small>AREA</small></button>
+                <button class="chart-type-button" type="button" data-chart-mode="line" aria-pressed="false"><span class="chart-tool-icon">⌁</span><small>LINE</small></button>
+              </div>
+            </div>
           </article>
         </div>
         <div class="section-heading"><div><div class="eyebrow">YOUR ACTIVITY</div><h2>Recent practice rounds</h2></div><button class="text-button" data-view="history">View all →</button></div>
@@ -93,14 +101,7 @@
           <article class="panel practice-chart">
             <div class="panel-heading"><div><div class="eyebrow">SELECTED INSTRUMENT</div><h2 id="practice-pair">EUR / USD</h2></div><span class="tag">SIMULATED</span></div>
             <div class="practice-price"><strong id="practice-price">1.08425</strong><span class="positive">+0.18%</span></div>
-            <div class="chart-layout">
-              <div class="chart-type-tools" role="group" aria-label="Chart type">
-                <button class="chart-type-button active" type="button" data-chart-mode="candles" aria-pressed="true" title="Candlesticks"><span class="chart-tool-icon">▥</span><small>CANDLES</small></button>
-                <button class="chart-type-button" type="button" data-chart-mode="line" aria-pressed="false" title="Line chart"><span class="chart-tool-icon">⌁</span><small>LINE</small></button>
-                <button class="chart-type-button" type="button" data-chart-mode="area" aria-pressed="false" title="Area chart"><span class="chart-tool-icon">▰</span><small>AREA</small></button>
-              </div>
-              <div class="chart-wrap large-chart"><svg id="practice-chart" viewBox="0 0 760 260" preserveAspectRatio="none" aria-label="Simulated practice chart"></svg></div>
-            </div>
+            <div class="chart-wrap large-chart"><svg id="practice-chart" viewBox="0 0 760 260" preserveAspectRatio="none" aria-label="Simulated practice chart"></svg></div>
             <div class="chart-foot"><span>FICTIONAL TRAINING FEED</span><span>REFRESHES LOCALLY</span></div>
             <div class="market-picker"><label for="instrument-select">Instrument</label><select id="instrument-select"><option value="EUR/USD">EUR/USD</option><option value="GBP/USD">GBP/USD</option><option value="USD/JPY">USD/JPY</option><option value="GOLD">GOLD</option><option value="BTC/USD">BTC/USD</option><option value="ETH/USD">ETH/USD</option></select></div>
           </article>

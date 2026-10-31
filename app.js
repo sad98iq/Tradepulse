@@ -41,16 +41,20 @@
     if(view==="academy") renderLessons();
     window.scrollTo({top:0,behavior:"smooth"});
   }
-  // Calm, continuous illustrative feed. A global mode keeps the hero and practice charts in sync.
+  // Smooth deterministic demo feed. All charts share one time-based movement model.
   const chartFeeds = new Map();
   let chartMode = "candles";
+  const valueAt = (time, phase) => {
+    const t = time / 1000;
+    return 100 + 0.78*Math.sin(t*0.43+phase) + 0.27*Math.sin(t*0.91+phase*1.37) + 0.11*Math.sin(t*1.63+phase*2.11);
+  };
   function makeFeed(id, seed, height, candleMode=false){
     const svg=$(id); if(!svg)return;
-    let n=seed, rand=()=>{n=(n*16807)%2147483647;return (n-1)/2147483646;};
     const phase=seed*0.73;
-    let value=100, points=[];
-    for(let i=0;i<90;i++){value+=(rand()-.5)*.18;points.push(value);}
-    const feed={id,svg,height,candleMode,mode:candleMode?chartMode:"line",points,current:100,target:100,phase,lastSample:0,lastFrame:0};
+    const now=performance.now();
+    const points=[];
+    for(let i=89;i>=0;i--) points.push(valueAt(now-i*65,phase));
+    const feed={id,svg,height,candleMode,mode:candleMode?chartMode:"line",points,current:valueAt(now,phase),phase,lastSample:now,lastRender:0};
     chartFeeds.set(id,feed); renderFeed(feed);
   }
   function smoothPath(coords){
@@ -99,10 +103,14 @@
   function simulatedPrice(m,feed){ return m.price+(feed.current-100)*priceScale(m); }
   function animateFeeds(now){
     for(const f of chartFeeds.values()){
-      // A bounded, time-based curve gives every feed the same smooth cadence: no random jumps or frozen target.
-      f.current=100+Math.sin(now/3600+f.phase)*0.92+Math.sin(now/6900+f.phase*1.7)*0.48+Math.sin(now/1450+f.phase*.6)*0.09;
-      if(now-f.lastSample>=90){f.lastSample=now;f.points.push(f.current);if(f.points.length>90)f.points.shift();}
-      renderFeed(f);
+      f.current=valueAt(now,f.phase);
+      if(now-f.lastSample>=55){
+        const steps=Math.min(4,Math.floor((now-f.lastSample)/55));
+        for(let i=0;i<steps;i++) f.points.push(valueAt(f.lastSample+(i+1)*55,f.phase));
+        f.lastSample+=steps*55;
+        while(f.points.length>90)f.points.shift();
+      }
+      if(now-f.lastRender>=55){renderFeed(f);f.lastRender=now;}
     }
     const main=chartFeeds.get('hero-chart');
     if(main){const m=markets[0];$('hero-price').textContent=simulatedPrice(m,main).toFixed(m.precision);}
