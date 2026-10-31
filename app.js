@@ -41,14 +41,15 @@
     if(view==="academy") renderLessons();
     window.scrollTo({top:0,behavior:"smooth"});
   }
-  // Continuous illustrative feed: target prices drift slowly and are eased every animation frame.
+  // Calm, continuous illustrative feed. A global mode keeps the hero and practice charts in sync.
   const chartFeeds = new Map();
+  let chartMode = "candles";
   function makeFeed(id, seed, height, candleMode=false){
     const svg=$(id); if(!svg)return;
     let n=seed, rand=()=>{n=(n*16807)%2147483647;return (n-1)/2147483646;};
     let value=100, points=[];
-    for(let i=0;i<72;i++){value+=(rand()-.49)*2.2;points.push(value);}
-    const feed={id,svg,height,candleMode,points,current:value,target:value,lastTarget:0,lastSample:0,lastFrame:0,rand};
+    for(let i=0;i<90;i++){value+=(rand()-.5)*.34;points.push(value);}
+    const feed={id,svg,height,candleMode,mode:candleMode?chartMode:"line",points,current:value,target:value,lastTarget:0,lastSample:0,lastFrame:0,rand};
     chartFeeds.set(id,feed); renderFeed(feed, true);
   }
   function smoothPath(coords){
@@ -60,41 +61,51 @@
     }
     return d;
   }
-  function renderFeed(f, initial=false){
-    const width=f.candleMode?760:300, h=f.height, vals=f.points;
-    const min=Math.min(...vals)-3,max=Math.max(...vals)+3,span=max-min||1;
-    const y=v=>h-((v-min)/span)*(h-12)-6;
-    const coords=vals.map((v,i)=>[i/(vals.length-1)*width,y(v)]);
-    const line=smoothPath(coords), area=`${line} L ${width} ${h} L 0 ${h} Z`;
+  function renderFeed(f){
+    const width=760, h=f.height, vals=f.points;
+    const min=Math.min(...vals)-1.2,max=Math.max(...vals)+1.2,span=max-min||1;
+    const y=v=>h-((v-min)/span)*(h-18)-9;
     const grid=`<g stroke="#29282d" stroke-width="1"><path d="M0 ${h*.25}H${width} M0 ${h*.5}H${width} M0 ${h*.75}H${width}"/></g>`;
-    let candles='';
-    if(f.candleMode){
-      const group=4, candleWidth=6, total=Math.floor(vals.length/group);
+    let visual='';
+    if(f.mode==='candles'){
+      const group=4, candleWidth=5.4, total=Math.floor(vals.length/group);
       for(let c=0;c<total;c++){
         const a=vals.slice(c*group,(c+1)*group); if(a.length<2)continue;
-        const open=a[0],close=a[a.length-1],high=Math.max(...a)+.8,low=Math.min(...a)-.8;
+        const open=a[0],close=a[a.length-1],high=Math.max(...a)+.10,low=Math.min(...a)-.10;
         const x=(c/(total-1||1))*width;
         const up=close>=open, color=up?'#20c997':'#ef626c';
         const top=y(Math.max(open,close)),bottom=y(Math.min(open,close));
-        candles+=`<g stroke="${color}" fill="${color}" opacity=".86"><path d="M${x} ${y(high)}V${y(low)}" stroke-width="1.3"/><rect x="${x-candleWidth/2}" y="${top}" width="${candleWidth}" height="${Math.max(2,bottom-top)}" rx=".7"/></g>`;
+        visual+=`<g stroke="${color}" fill="${color}" opacity=".94"><path d="M${x} ${y(high)}V${y(low)}" stroke-width="1.25"/><rect x="${x-candleWidth/2}" y="${top}" width="${candleWidth}" height="${Math.max(2,bottom-top)}" rx=".65"/></g>`;
       }
+    } else {
+      const coords=vals.map((v,i)=>[i/(vals.length-1)*width,y(v)]);
+      const line=smoothPath(coords), area=`${line} L ${width} ${h} L 0 ${h} Z`;
+      visual=`<defs><linearGradient id="fill-${f.id}" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#d6ad55" stop-opacity=".14"/><stop offset="100%" stop-color="#d6ad55" stop-opacity="0"/></linearGradient></defs><path d="${area}" fill="url(#fill-${f.id})"/><path d="${line}" fill="none" stroke="#d6ad55" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`;
     }
-    const last=coords[coords.length-1];
-    f.svg.innerHTML=`<defs><linearGradient id="fill-${f.id}" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#d6ad55" stop-opacity=".22"/><stop offset="100%" stop-color="#d6ad55" stop-opacity="0"/></linearGradient></defs>${grid}<path d="${area}" fill="url(#fill-${f.id})"/>${candles}<path d="${line}" fill="none" stroke="#d6ad55" stroke-width="${f.candleMode?2.1:2.4}" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/><circle cx="${last[0]}" cy="${last[1]}" r="3.3" fill="#f2d58d" stroke="#d6ad55" stroke-width="2"/>`;
+    const lastY=y(vals[vals.length-1]);
+    f.svg.innerHTML=`${grid}${visual}<circle cx="${width-2}" cy="${lastY}" r="3" fill="#f2d58d" stroke="#d6ad55" stroke-width="1.5"/>`;
+  }
+  function setChartMode(mode){
+    chartMode=mode;
+    chartFeeds.forEach(f=>{if(f.candleMode){f.mode=mode;renderFeed(f);}});
+    document.querySelectorAll('[data-chart-mode]').forEach(btn=>{
+      const active=btn.dataset.chartMode===mode;
+      btn.classList.toggle('active',active);btn.setAttribute('aria-pressed',String(active));
+    });
   }
   function animateFeeds(now){
     for(const f of chartFeeds.values()){
       const dt=f.lastFrame?Math.min(64,now-f.lastFrame):16; f.lastFrame=now;
-      if(now-f.lastTarget>1150){f.lastTarget=now;f.target+= (f.rand()-.5)*5.5;}
-      // Frame-rate independent easing prevents visible price jumps.
-      f.current+=(f.target-f.current)*(1-Math.exp(-dt/720));
-      if(now-f.lastSample>75){f.lastSample=now;f.points.push(f.current);if(f.points.length>72)f.points.shift();}
+      // Small target changes and slower easing reduce the visible wave while keeping motion continuous.
+      if(now-f.lastTarget>1900){f.lastTarget=now;f.target+=(f.rand()-.5)*.72;}
+      f.current+=(f.target-f.current)*(1-Math.exp(-dt/1850));
+      if(now-f.lastSample>90){f.lastSample=now;f.points.push(f.current);if(f.points.length>90)f.points.shift();}
       renderFeed(f);
     }
     const main=chartFeeds.get('hero-chart');
-    if(main){markets[0].price=1.08425+(main.current-100)*0.000035;$('hero-price').textContent=markets[0].price.toFixed(5);}
+    if(main){markets[0].price=1.08425+(main.current-100)*0.000012;$('hero-price').textContent=markets[0].price.toFixed(5);}
     const practice=chartFeeds.get('practice-chart');
-    if(practice){const m=markets.find(x=>x.symbol===$('instrument-select').value)||markets[0];$('practice-price').textContent=(m.price+(practice.current-100)*(m.precision===5?.000035:m.precision===3?.0035:.035)).toLocaleString('en-US',{minimumFractionDigits:m.precision,maximumFractionDigits:m.precision});}
+    if(practice){const m=markets.find(x=>x.symbol===$('instrument-select').value)||markets[0];$('practice-price').textContent=(m.price+(practice.current-100)*(m.precision===5?.000012:m.precision===3?.0012:.012)).toLocaleString('en-US',{minimumFractionDigits:m.precision,maximumFractionDigits:m.precision});}
     requestAnimationFrame(animateFeeds);
   }
   function drawChart(id,seed=7,height=210){makeFeed(id,seed,height,id==='hero-chart'||id==='practice-chart');}
@@ -191,7 +202,8 @@
   $("save-profile").addEventListener("click",()=>{const name=$("name-input").value.trim().slice(0,24);if(!name){notify("Enter a display name first.");return;}state.name=name;save();$("profile-feedback").textContent="Profile saved on this device.";notify("Profile updated.");});
   $("clear-data").addEventListener("click",()=>{if(confirm("Permanently clear all locally saved TradePulse practice data?")){localStorage.removeItem(KEY);state={...defaults};save();renderLessons();renderHistory();notify("Local data cleared.");}});
   $("export-data").addEventListener("click",()=>{const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="tradepulse-practice-data.json";a.click();URL.revokeObjectURL(url);});
-  $("hero-price").textContent=markets[0].price.toFixed(5);drawChart("hero-chart",8,210);drawChart("practice-chart",20,260);
+  document.querySelectorAll('[data-chart-mode]').forEach(btn=>btn.addEventListener('click',()=>setChartMode(btn.dataset.chartMode)));
+  $("hero-price").textContent=markets[0].price.toFixed(5);drawChart("hero-chart",8,210);drawChart("practice-chart",20,260);setChartMode(chartMode);
   renderMarkets();renderLessons();setInstrument();updateUI();
   requestAnimationFrame(animateFeeds);
   if("serviceWorker" in navigator && location.protocol!=="file:"){window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));}

@@ -93,7 +93,13 @@
           <article class="panel practice-chart">
             <div class="panel-heading"><div><div class="eyebrow">SELECTED INSTRUMENT</div><h2 id="practice-pair">EUR / USD</h2></div><span class="tag">SIMULATED</span></div>
             <div class="practice-price"><strong id="practice-price">1.08425</strong><span class="positive">+0.18%</span></div>
-            <div class="chart-wrap large-chart"><svg id="practice-chart" viewBox="0 0 760 260" preserveAspectRatio="none" aria-label="Simulated practice chart"></svg></div>
+            <div class="chart-layout">
+              <div class="chart-type-tools" role="group" aria-label="Chart type">
+                <button class="chart-type-button active" type="button" data-chart-mode="candles" aria-pressed="true" title="Candlesticks"><span class="chart-tool-icon">▥</span><small>CANDLES</small></button>
+                <button class="chart-type-button" type="button" data-chart-mode="line" aria-pressed="false" title="Line chart"><span class="chart-tool-icon">⌁</span><small>LINE</small></button>
+              </div>
+              <div class="chart-wrap large-chart"><svg id="practice-chart" viewBox="0 0 760 260" preserveAspectRatio="none" aria-label="Simulated practice chart"></svg></div>
+            </div>
             <div class="chart-foot"><span>FICTIONAL TRAINING FEED</span><span>REFRESHES LOCALLY</span></div>
             <div class="market-picker"><label for="instrument-select">Instrument</label><select id="instrument-select"><option>EUR/USD</option><option>GBP/USD</option><option>USD/JPY</option><option>GOLD</option><option>BTC/USD</option><option>ETH/USD</option></select></div>
           </article>
