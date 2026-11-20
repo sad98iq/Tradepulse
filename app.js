@@ -41,116 +41,191 @@
     if(view==="academy") renderLessons();
     window.scrollTo({top:0,behavior:"smooth"});
   }
-  // Continuous demo feed: a smooth underlying curve drives every chart.
-  // Candles are real OHLC intervals; the active candle updates every animation frame.
   const chartFeeds = new Map();
-  let chartMode = "candles";
   const BAR_MS = 1400;
+  const TICK_MS = 350;
   const HISTORY_MS = 56000;
-  const SAMPLE_MS = 100;
-  const valueAt = (elapsed, phase) => {
-    const t = elapsed / 1000;
-    return 100 + 0.62*Math.sin(t*0.105+phase) + 0.24*Math.sin(t*0.047+phase*1.31) + 0.075*Math.sin(t*0.19+phase*2.07);
-  };
-  function makeFeed(id, seed, height, candleMode=false){
-    const svg=$(id); if(!svg)return;
-    const phase=seed*0.73, now=performance.now();
-    const bars=[];
-    for(let start=-HISTORY_MS;start<0;start+=BAR_MS){
-      const vals=[];
-      for(let t=start;t<start+BAR_MS;t+=100) vals.push(valueAt(t,phase));
-      if(!vals.length)continue;
-      bars.push({open:vals[0],high:Math.max(...vals),low:Math.min(...vals),close:vals[vals.length-1]});
-    }
-    const points=[];
-    for(let t=-HISTORY_MS;t<=0;t+=SAMPLE_MS) points.push(valueAt(t,phase));
-    const feed={id,svg,height,candleMode,mode:candleMode?chartMode:"line",phase,startTime:now,elapsed:0,bars,points,lastSample:0,lastRender:0,current:valueAt(0,phase)};
-    chartFeeds.set(id,feed); renderFeed(feed);
+  let chartMode = "candles";
+
+  function tickPrice(tick, phase) {
+    const seconds = tick * TICK_MS / 1000;
+    const trend = 0.62 * Math.sin(seconds * 0.105 + phase)
+      + 0.24 * Math.sin(seconds * 0.047 + phase * 1.31);
+    const swings = 0.09 * Math.sin(seconds * 1.25 + phase * 2.07)
+      + 0.023 * Math.sin(tick * 0.93 + phase * 3.7)
+      + 0.012 * Math.sin(tick * 2.39 + phase);
+    return 100 + trend + swings;
   }
-  function smoothPath(coords){
-    if(!coords.length)return '';
-    let d=`M ${coords[0][0]} ${coords[0][1]}`;
-    for(let i=1;i<coords.length;i++){
-      const prev=coords[i-1],cur=coords[i],mx=(prev[0]+cur[0])/2;
-      d+=` Q ${mx} ${prev[1]} ${cur[0]} ${cur[1]}`;
-    }
-    return d;
+
+  function valueAt(elapsed, phase) {
+    const tickPosition = elapsed / TICK_MS;
+    const tick = Math.floor(tickPosition);
+    const open = tickPrice(tick, phase);
+    return open + (tickPrice(tick + 1, phase) - open) * (tickPosition - tick);
   }
-  function renderFeed(f){
-    const width=760,h=f.height;
-    const vals=f.mode==='candles'?f.bars.flatMap(b=>[b.low,b.high,b.open,b.close]):f.points;
-    const min=Math.min(...vals)-.22,max=Math.max(...vals)+.22,span=max-min||1;
-    const y=v=>h-((v-min)/span)*(h-18)-9;
-    const grid=`<g stroke="#29282d" stroke-width="1"><path d="M0 ${h*.25}H${width} M0 ${h*.5}H${width} M0 ${h*.75}H${width}"/></g>`;
-    let visual='';
-    if(f.mode==='candles'){
-      const bars=f.bars, step=width/Math.max(1,bars.length), candleWidth=Math.max(4,step*.56);
-      bars.forEach((b,i)=>{
-        const x=(i+.5)*step,up=b.close>=b.open,color=up?'#20c997':'#ef626c';
-        const top=y(Math.max(b.open,b.close)),bottom=y(Math.min(b.open,b.close));
-        visual+=`<g stroke="${color}" fill="${color}"><path d="M${x} ${y(b.high)}V${y(b.low)}" stroke-width="1.35"/><rect x="${x-candleWidth/2}" y="${top}" width="${candleWidth}" height="${Math.max(1.8,bottom-top)}" rx=".8"/></g>`;
-      });
+
+  function makeFeed(id, seed, height, candleMode) {
+    const svg = $(id);
+    const width = svg.viewBox.baseVal.width;
+    svg.innerHTML = `
+      <defs>
+        <linearGradient id="fill-${id}" x1="0" x2="0" y1="0" y2="100%">
+          <stop offset="0%" stop-color="#d6ad55" stop-opacity=".30"/>
+          <stop offset="100%" stop-color="#d6ad55" stop-opacity=".015"/>
+        </linearGradient>
+      </defs>
+      <path d="M0 ${height * .25}H${width} M0 ${height * .5}H${width} M0 ${height * .75}H${width}" stroke="#29282d" fill="none"/>
+      <path fill="url(#fill-${id})"/>
+      <path fill="none" stroke="#d6ad55" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+      <path stroke="#20c997" fill="#20c997"/>
+      <path stroke="#ef626c" fill="#ef626c"/>
+      <path stroke="#d6ad55" stroke-opacity=".55" fill="none"/>
+      <circle r="2.8" fill="#f2d58d" stroke="#d6ad55" stroke-width="1.3"/>
+    `;
+    const [, area, line, rising, falling, guide] = svg.querySelectorAll("path");
+    const feed = {
+      width, height, area, line, rising, falling, guide, marker: svg.querySelector("circle"),
+      view: svg.closest(".view"), candleMode, mode: candleMode ? chartMode : "line",
+      phase: seed * 0.73, started: performance.now(), lastRender: null,
+    };
+    chartFeeds.set(id, feed);
+    renderFeed(feed, feed.started);
+  }
+
+  function candlePaths(elapsed, phase, right, width, y) {
+    const activeStart = Math.floor(elapsed / BAR_MS) * BAR_MS;
+    const step = width * BAR_MS / HISTORY_MS;
+    const bodyWidth = step * 0.56;
+    let rising = "";
+    let falling = "";
+
+    for (let start = activeStart - HISTORY_MS; start <= activeStart; start += BAR_MS) {
+      const end = Math.min(start + BAR_MS, elapsed);
+      const open = valueAt(start, phase);
+      const close = valueAt(end, phase);
+      let high = Math.max(open, close);
+      let low = Math.min(open, close);
+
+      for (let tick = start + TICK_MS; tick < end; tick += TICK_MS) {
+        const price = tickPrice(tick / TICK_MS, phase);
+        high = Math.max(high, price);
+        low = Math.min(low, price);
+      }
+
+      const x = right - (elapsed - start) * step / BAR_MS;
+      const top = y(Math.max(open, close));
+      const bottom = y(Math.min(open, close));
+      const bodyHeight = Math.max(1.5, bottom - top);
+      const bodyTop = (bottom + top - bodyHeight) / 2;
+      const path = `M${x.toFixed(2)} ${y(high).toFixed(2)}V${y(low).toFixed(2)}`
+        + `M${(x - bodyWidth / 2).toFixed(2)} ${bodyTop.toFixed(2)}h${bodyWidth.toFixed(2)}v${bodyHeight.toFixed(2)}h-${bodyWidth.toFixed(2)}Z`;
+      if (close >= open) rising += path;
+      else falling += path;
+    }
+
+    return {rising, falling, activeX: right - (elapsed - activeStart) * step / BAR_MS};
+  }
+
+  function renderFeed(feed, now) {
+    const elapsed = now - feed.started;
+    const start = elapsed - HISTORY_MS;
+    const right = feed.width - 9;
+    const current = valueAt(elapsed, feed.phase);
+    const first = valueAt(start, feed.phase);
+    let low = Math.min(first, current);
+    let high = Math.max(first, current);
+    const points = [];
+
+    // Include every simulated tick so the line shows the actual turning points.
+    for (let tick = Math.floor(start / TICK_MS) + 1; tick * TICK_MS < elapsed; tick++) {
+      const price = tickPrice(tick, feed.phase);
+      low = Math.min(low, price);
+      high = Math.max(high, price);
+      points.push([tick * TICK_MS, price]);
+    }
+
+    const targetLow = low - 0.22;
+    const targetHigh = high + 0.22;
+    const ease = feed.lastRender === null ? 1 : 1 - Math.exp(-(now - feed.lastRender) / 250);
+    feed.low = feed.low === undefined ? targetLow : feed.low + (targetLow - feed.low) * ease;
+    feed.high = feed.high === undefined ? targetHigh : feed.high + (targetHigh - feed.high) * ease;
+    feed.lastRender = now;
+
+    const padding = Math.min(9, feed.height * 0.14);
+    const y = price => feed.height - padding
+      - (price - feed.low) / (feed.high - feed.low) * (feed.height - 2 * padding);
+    const currentY = y(current).toFixed(2);
+
+    if (feed.mode === "candles") {
+      const candles = candlePaths(elapsed, feed.phase, right, feed.width, y);
+      feed.guide.setAttribute("d", `M${candles.activeX.toFixed(2)} ${currentY}H${right}`);
+      feed.rising.setAttribute("d", candles.rising);
+      feed.falling.setAttribute("d", candles.falling);
     } else {
-      const coords=f.points.map((v,i)=>[i/(f.points.length-1)*width,y(v)]);
-      const line=smoothPath(coords),area=`${line} L ${width} ${h} L 0 ${h} Z`;
-      const fill=f.mode==='area'?`<path d="${area}" fill="url(#fill-${f.id})"/>`:'';
-      visual=`<defs><linearGradient id="fill-${f.id}" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#d6ad55" stop-opacity=".30"/><stop offset="100%" stop-color="#d6ad55" stop-opacity=".015"/></linearGradient></defs>${fill}<path d="${line}" fill="none" stroke="#d6ad55" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`;
+      let line = `M0 ${y(first).toFixed(2)}`;
+      for (const [time, price] of points) {
+        const x = (time - start) / HISTORY_MS * right;
+        line += `L${x.toFixed(2)} ${y(price).toFixed(2)}`;
+      }
+      line += `L${right} ${currentY}`;
+      feed.line.setAttribute("d", line);
+      if (feed.mode === "area") {
+        feed.area.setAttribute("d", `${line}V${feed.height}H0Z`);
+      }
     }
-    const last=f.mode==='candles'?f.bars[f.bars.length-1].close:f.points[f.points.length-1];
-    visual+=`<circle cx="${width-2}" cy="${y(last)}" r="2.8" fill="#f2d58d" stroke="#d6ad55" stroke-width="1.3"/>`;
-    f.svg.innerHTML=`${grid}${visual}`;
+    feed.marker.setAttribute("cx", right);
+    feed.marker.setAttribute("cy", currentY);
   }
-  function setChartMode(mode){
-    if(!['candles','area','line'].includes(mode))return;
-    chartMode=mode;
-    chartFeeds.forEach(f=>{if(f.candleMode){f.mode=mode;renderFeed(f);}});
-    document.querySelectorAll('[data-chart-mode]').forEach(btn=>{
-      const active=btn.dataset.chartMode===mode;
-      btn.classList.toggle('active',active);btn.setAttribute('aria-pressed',String(active));
+
+  function setChartMode(mode) {
+    if (!["candles", "area", "line"].includes(mode)) return;
+    chartMode = mode;
+    const now = performance.now();
+    for (const feed of chartFeeds.values()) {
+      if (!feed.candleMode) continue;
+      feed.mode = mode;
+      feed.rising.style.display = feed.falling.style.display = feed.guide.style.display = mode === "candles" ? "" : "none";
+      feed.line.style.display = mode === "candles" ? "none" : "";
+      feed.area.style.display = mode === "area" ? "" : "none";
+      renderFeed(feed, now);
+    }
+    document.querySelectorAll("[data-chart-mode]").forEach(button => {
+      const selected = button.dataset.chartMode === mode;
+      button.classList.toggle("active", selected);
+      button.setAttribute("aria-pressed", String(selected));
     });
   }
-  function priceScale(m){ return m.precision===5?0.00012:m.precision===3?0.012:m.symbol==="GOLD"?0.55:8; }
-  function simulatedPrice(m,feed){ return m.price+(feed.current-100)*priceScale(m); }
-  function animateFeeds(now){
-    for(const f of chartFeeds.values()){
-      const elapsed=now-f.startTime;
-      f.elapsed=elapsed;
-      f.current=valueAt(elapsed,f.phase);
-      const barIndex=Math.floor(elapsed/BAR_MS);
-      // Start a new OHLC bar exactly on its interval boundary; retain completed bars.
-      if(!f.activeBar){
-        const v=valueAt(elapsed,f.phase);f.activeBar={open:v,high:v,low:v,close:v};
-      }
-      const barElapsed=elapsed%BAR_MS;
-      if(f._barIndex===undefined)f._barIndex=barIndex;
-      if(barIndex!==f._barIndex){
-        f.bars.push(f.activeBar);while(f.bars.length>40)f.bars.shift();
-        f.activeBar={open:f.current,high:f.current,low:f.current,close:f.current};f._barIndex=barIndex;
-      }
-      f.activeBar.close=f.current;f.activeBar.high=Math.max(f.activeBar.high,f.current);f.activeBar.low=Math.min(f.activeBar.low,f.current);
-      if(f.bars.length){f.bars[f.bars.length-1]=f.bars[f.bars.length-1];}
-      if(now-f.lastSample>=SAMPLE_MS){
-        const steps=Math.min(12,Math.floor((now-f.lastSample)/SAMPLE_MS));
-        for(let i=0;i<steps;i++)f.points.push(valueAt(f.lastSample+SAMPLE_MS*(i+1)-f.startTime,f.phase));
-        f.lastSample+=steps*SAMPLE_MS;while(f.points.length>560)f.points.shift();
-      }
-      const renderEvery=f.id.startsWith("spark-")?180:(f.mode==="candles"?33:55);
-      if(now-f.lastRender>=renderEvery){
-        if(f.mode==='candles'){
-          const displayBars=f.bars.slice(-39).concat([{...f.activeBar}]);
-          const saved=f.bars;f.bars=displayBars;renderFeed(f);f.bars=saved;
-        } else renderFeed(f);
-        f.lastRender=now;
+
+  function priceScale(m) { return m.precision === 5 ? 0.00012 : m.precision === 3 ? 0.012 : m.symbol === "GOLD" ? 0.55 : 8; }
+  function simulatedPrice(m, feed, now = performance.now()) {
+    return m.price + (valueAt(now - feed.started, feed.phase) - 100) * priceScale(m);
+  }
+  function animateFeeds(now) {
+    for (const [id, feed] of chartFeeds) {
+      if (!feed.view.classList.contains("active") || now <= feed.lastRender) continue;
+      if (!feed.candleMode && now - feed.lastRender < 180) continue;
+      renderFeed(feed, now);
+
+      if (id === "hero-chart") {
+        const market = markets[0];
+        $("hero-price").textContent = simulatedPrice(market, feed, now).toFixed(market.precision);
+      } else {
+        const market = id === "practice-chart"
+          ? markets.find(m => m.symbol === $("instrument-select").value) || markets[0]
+          : markets[Number(id.slice("spark-".length))];
+        const label = id === "practice-chart" ? $("practice-price")
+          : document.querySelector(`[data-market-price="${market.symbol}"]`);
+        label.textContent = simulatedPrice(market, feed, now).toLocaleString("en-US", {
+          minimumFractionDigits: market.precision, maximumFractionDigits: market.precision,
+        });
       }
     }
-    const main=chartFeeds.get('hero-chart');
-    if(main){const m=markets[0];$('hero-price').textContent=simulatedPrice(m,main).toFixed(m.precision);}
-    const practice=chartFeeds.get('practice-chart');
-    if(practice){const m=markets.find(x=>x.symbol===$('instrument-select').value)||markets[0];$('practice-price').textContent=simulatedPrice(m,practice).toLocaleString('en-US',{minimumFractionDigits:m.precision,maximumFractionDigits:m.precision});}
-    markets.forEach((m,i)=>{const f=chartFeeds.get('spark-'+i),el=document.querySelector(`[data-market-price="${m.symbol}"]`);if(f&&el)el.textContent=simulatedPrice(m,f).toLocaleString('en-US',{minimumFractionDigits:m.precision,maximumFractionDigits:m.precision});});
     requestAnimationFrame(animateFeeds);
   }
-  function drawChart(id,seed=7,height=210){makeFeed(id,seed,height,id==='hero-chart'||id==='practice-chart');}
+
+  function drawChart(id, seed, height) {
+    makeFeed(id, seed, height, id === "hero-chart" || id === "practice-chart");
+  }
   function updateUI(){
     $("balance-stat").textContent=money(state.balance); $("ticket-balance").textContent=money(state.balance);
     $("trades-stat").textContent=state.history.length;
