@@ -42,26 +42,62 @@
     window.scrollTo({top:0,behavior:"smooth"});
   }
   const chartFeeds = new Map();
-  const BAR_MS = 1400;
-  const TICK_MS = 350;
-  const HISTORY_MS = 56000;
+  const BAR_MS = 1800;
+  const TICK_MS = 100;
+  const VISIBLE_CANDLES = 30;
+  const HISTORY_MS = BAR_MS * VISIBLE_CANDLES;
+  const CANDLE_SHIFT_MS = 260;
   let chartMode = "candles";
 
-  function tickPrice(tick, phase) {
-    const seconds = tick * TICK_MS / 1000;
-    const trend = 0.62 * Math.sin(seconds * 0.105 + phase)
-      + 0.24 * Math.sin(seconds * 0.047 + phase * 1.31);
-    const swings = 0.09 * Math.sin(seconds * 1.25 + phase * 2.07)
-      + 0.023 * Math.sin(tick * 0.93 + phase * 3.7)
-      + 0.012 * Math.sin(tick * 2.39 + phase);
-    return 100 + trend + swings;
+  function unitNoise(index, phase) {
+    const signal = Math.sin((index + phase * 17.31) * 12.9898 + phase * 78.233) * 43758.5453123;
+    return signal - Math.floor(signal);
+  }
+
+  function boundaryPrice(barIndex, phase) {
+    return 100
+      + 0.58 * Math.sin(barIndex * 0.18 + phase)
+      + 0.24 * Math.sin(barIndex * 0.061 + phase * 1.63)
+      + (unitNoise(barIndex, phase) - 0.5) * 0.22;
+  }
+
+  function smoothProgress(progress) {
+    return progress * progress * (3 - 2 * progress);
+  }
+
+  function candlePrice(barIndex, progress, phase) {
+    const position = Math.max(0, Math.min(1, progress));
+    const open = boundaryPrice(barIndex, phase);
+    const close = boundaryPrice(barIndex + 1, phase);
+    const intrabarMove = Math.sin(Math.PI * position) * (
+      (unitNoise(barIndex * 3 + 1, phase) - 0.5) * 0.30 * Math.sin(position * Math.PI * 1.3)
+      + (unitNoise(barIndex * 3 + 2, phase) - 0.5) * 0.16
+    );
+    return open + (close - open) * smoothProgress(position) + intrabarMove;
   }
 
   function valueAt(elapsed, phase) {
-    const tickPosition = elapsed / TICK_MS;
-    const tick = Math.floor(tickPosition);
-    const open = tickPrice(tick, phase);
-    return open + (tickPrice(tick + 1, phase) - open) * (tickPosition - tick);
+    const barIndex = Math.floor(elapsed / BAR_MS);
+    const progress = (elapsed - barIndex * BAR_MS) / BAR_MS;
+    return candlePrice(barIndex, progress, phase);
+  }
+
+  function candleData(barIndex, progress, phase) {
+    const position = Math.max(0, Math.min(1, progress));
+    const open = boundaryPrice(barIndex, phase);
+    const close = candlePrice(barIndex, position, phase);
+    let high = Math.max(open, close);
+    let low = Math.min(open, close);
+    const sampleCount = Math.max(6, Math.ceil(position * 12));
+
+    for (let sample = 1; sample < sampleCount; sample++) {
+      const price = candlePrice(barIndex, position * sample / sampleCount, phase);
+      high = Math.max(high, price);
+      low = Math.min(low, price);
+    }
+
+    const wick = 0.026 + unitNoise(barIndex * 5 + 4, phase) * 0.044;
+    return {open, close, high: high + wick, low: low - wick};
   }
 
   function makeFeed(id, seed, height, candleMode) {
@@ -92,60 +128,56 @@
     renderFeed(feed, feed.started);
   }
 
-  function candlePaths(elapsed, phase, right, width, y) {
+  function candlePaths(elapsed, phase, right, step, y) {
     const activeStart = Math.floor(elapsed / BAR_MS) * BAR_MS;
-    const step = width * BAR_MS / HISTORY_MS;
-    const bodyWidth = step * 0.56;
+    const activeProgress = (elapsed - activeStart) / BAR_MS;
+    const shiftProgress = Math.min(1, activeProgress * BAR_MS / CANDLE_SHIFT_MS);
+    const bodyWidth = Math.max(5, step * 0.56);
     let rising = "";
     let falling = "";
 
-    for (let start = activeStart - HISTORY_MS; start <= activeStart; start += BAR_MS) {
-      const end = Math.min(start + BAR_MS, elapsed);
-      const open = valueAt(start, phase);
-      const close = valueAt(end, phase);
-      let high = Math.max(open, close);
-      let low = Math.min(open, close);
-
-      for (let tick = start + TICK_MS; tick < end; tick += TICK_MS) {
-        const price = tickPrice(tick / TICK_MS, phase);
-        high = Math.max(high, price);
-        low = Math.min(low, price);
-      }
-
-      const x = right - (elapsed - start) * step / BAR_MS;
-      const top = y(Math.max(open, close));
-      const bottom = y(Math.min(open, close));
+    for (let barIndex = activeStart / BAR_MS - VISIBLE_CANDLES + 1; barIndex <= activeStart / BAR_MS; barIndex++) {
+      const distance = activeStart / BAR_MS - barIndex;
+      const candle = candleData(barIndex, distance === 0 ? activeProgress : 1, phase);
+      const movedSlots = distance === 0 ? 0 : distance - 1 + shiftProgress;
+      const x = right - step * movedSlots;
+      const top = y(Math.max(candle.open, candle.close));
+      const bottom = y(Math.min(candle.open, candle.close));
       const bodyHeight = Math.max(1.5, bottom - top);
       const bodyTop = (bottom + top - bodyHeight) / 2;
-      const path = `M${x.toFixed(2)} ${y(high).toFixed(2)}V${y(low).toFixed(2)}`
+      const path = `M${x.toFixed(2)} ${y(candle.high).toFixed(2)}V${y(candle.low).toFixed(2)}`
         + `M${(x - bodyWidth / 2).toFixed(2)} ${bodyTop.toFixed(2)}h${bodyWidth.toFixed(2)}v${bodyHeight.toFixed(2)}h-${bodyWidth.toFixed(2)}Z`;
-      if (close >= open) rising += path;
+      if (candle.close >= candle.open) rising += path;
       else falling += path;
     }
 
-    return {rising, falling, activeX: right - (elapsed - activeStart) * step / BAR_MS};
+    return {rising, falling, activeX: right, bodyWidth};
   }
 
   function renderFeed(feed, now) {
     const elapsed = now - feed.started;
-    const start = elapsed - HISTORY_MS;
-    const right = feed.width - 9;
-    const current = valueAt(elapsed, feed.phase);
-    const first = valueAt(start, feed.phase);
-    let low = Math.min(first, current);
-    let high = Math.max(first, current);
+    const activeBar = Math.floor(elapsed / BAR_MS);
+    const activeProgress = (elapsed - activeBar * BAR_MS) / BAR_MS;
+    const step = feed.width / (VISIBLE_CANDLES + 0.55);
+    const right = feed.width - step * 0.62;
+    const current = candlePrice(activeBar, activeProgress, feed.phase);
+    const first = valueAt(elapsed - HISTORY_MS, feed.phase);
+    let low = Infinity;
+    let high = -Infinity;
     const points = [];
 
-    // Include every simulated tick so the line shows the actual turning points.
-    for (let tick = Math.floor(start / TICK_MS) + 1; tick * TICK_MS < elapsed; tick++) {
-      const price = tickPrice(tick, feed.phase);
-      low = Math.min(low, price);
-      high = Math.max(high, price);
-      points.push([tick * TICK_MS, price]);
+    for (let barIndex = activeBar - VISIBLE_CANDLES + 1; barIndex <= activeBar; barIndex++) {
+      const candle = candleData(barIndex, barIndex === activeBar ? activeProgress : 1, feed.phase);
+      low = Math.min(low, candle.low);
+      high = Math.max(high, candle.high);
     }
 
-    const targetLow = low - 0.22;
-    const targetHigh = high + 0.22;
+    for (let time = elapsed - HISTORY_MS + TICK_MS; time < elapsed; time += TICK_MS) {
+      points.push([time, valueAt(time, feed.phase)]);
+    }
+
+    const targetLow = low - 0.08;
+    const targetHigh = high + 0.08;
     const ease = feed.lastRender === null ? 1 : 1 - Math.exp(-(now - feed.lastRender) / 250);
     feed.low = feed.low === undefined ? targetLow : feed.low + (targetLow - feed.low) * ease;
     feed.high = feed.high === undefined ? targetHigh : feed.high + (targetHigh - feed.high) * ease;
@@ -157,23 +189,27 @@
     const currentY = y(current).toFixed(2);
 
     if (feed.mode === "candles") {
-      const candles = candlePaths(elapsed, feed.phase, right, feed.width, y);
-      feed.guide.setAttribute("d", `M${candles.activeX.toFixed(2)} ${currentY}H${right}`);
+      const candles = candlePaths(elapsed, feed.phase, right, step, y);
+      const markerX = Math.min(feed.width - 5, candles.activeX + candles.bodyWidth / 2 + 8);
+      feed.guide.setAttribute("d", `M${(candles.activeX + candles.bodyWidth / 2).toFixed(2)} ${currentY}H${markerX.toFixed(2)}`);
       feed.rising.setAttribute("d", candles.rising);
       feed.falling.setAttribute("d", candles.falling);
+      feed.marker.setAttribute("cx", markerX.toFixed(2));
     } else {
+      const start = elapsed - HISTORY_MS;
+      const lineRight = feed.width - 9;
       let line = `M0 ${y(first).toFixed(2)}`;
       for (const [time, price] of points) {
-        const x = (time - start) / HISTORY_MS * right;
+        const x = (time - start) / HISTORY_MS * lineRight;
         line += `L${x.toFixed(2)} ${y(price).toFixed(2)}`;
       }
-      line += `L${right} ${currentY}`;
+      line += `L${lineRight} ${currentY}`;
       feed.line.setAttribute("d", line);
       if (feed.mode === "area") {
         feed.area.setAttribute("d", `${line}V${feed.height}H0Z`);
       }
+      feed.marker.setAttribute("cx", lineRight);
     }
-    feed.marker.setAttribute("cx", right);
     feed.marker.setAttribute("cy", currentY);
   }
 
